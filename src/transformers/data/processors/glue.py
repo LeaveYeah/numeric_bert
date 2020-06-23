@@ -22,7 +22,7 @@ from typing import List, Optional, Union
 
 from ...file_utils import is_tf_available
 from ...tokenization_utils import PreTrainedTokenizer
-from .utils import DataProcessor, InputExample, InputFeatures
+from .utils import DataProcessor, InputExample, InputFeatures, PubmedQAExample
 
 
 if is_tf_available():
@@ -64,6 +64,38 @@ def glue_convert_examples_to_features(
         examples, tokenizer, max_length=max_length, task=task, label_list=label_list, output_mode=output_mode
     )
 
+def pubmedqa_convert_examples_to_features(
+    examples: Union[List[InputExample], "tf.data.Dataset"],
+    tokenizer: PreTrainedTokenizer,
+    max_length: Optional[int] = None,
+    task=None,
+    label_list=None,
+    output_mode=None,
+):
+    """
+    Loads a data file into a list of ``InputFeatures``
+
+    Args:
+        examples: List of ``InputExamples`` or ``tf.data.Dataset`` containing the examples.
+        tokenizer: Instance of a tokenizer that will tokenize the examples
+        max_length: Maximum example length. Defaults to the tokenizer's max_len
+        task: GLUE task
+        label_list: List of labels. Can be obtained from the processor using the ``processor.get_labels()`` method
+        output_mode: String indicating the output mode. Either ``regression`` or ``classification``
+
+    Returns:
+        If the ``examples`` input is a ``tf.data.Dataset``, will return a ``tf.data.Dataset``
+        containing the task-specific features. If the input is a list of ``InputExamples``, will return
+        a list of task-specific ``InputFeatures`` which can be fed to the model.
+
+    """
+    if is_tf_available() and isinstance(examples, tf.data.Dataset):
+        if task is None:
+            raise ValueError("When calling glue_convert_examples_to_features from TF, the task parameter is required.")
+        return _tf_glue_convert_examples_to_features(examples, tokenizer, max_length=max_length, task=task)
+    return _pubmedqa_convert_examples_to_features(
+        examples, tokenizer, max_length=max_length, task=task, label_list=label_list, output_mode=output_mode
+    )
 
 if is_tf_available():
 
@@ -154,6 +186,61 @@ def _glue_convert_examples_to_features(
         logger.info("features: %s" % features[i])
 
     return features
+
+def _pubmedqa_convert_examples_to_features(
+    examples: List[PubmedQAExample],
+    tokenizer: PreTrainedTokenizer,
+    max_length: Optional[int] = None,
+    task=None,
+    label_list=None,
+    output_mode=None,
+    numbers=None
+):
+    if max_length is None:
+        max_length = tokenizer.max_len
+
+    if task is not None:
+        processor = glue_processors[task]()
+        if label_list is None:
+            label_list = processor.get_labels()
+            logger.info("Using label list %s for task %s" % (label_list, task))
+        if output_mode is None:
+            output_mode = glue_output_modes[task]
+            logger.info("Using output mode %s for task %s" % (output_mode, task))
+
+    label_map = {label: i for i, label in enumerate(label_list)}
+
+    def label_from_example(example: PubmedQAExample) -> Union[int, float, None]:
+        if example.label is None:
+            return None
+        if output_mode == "classification":
+            return label_map[example.label]
+        elif output_mode == "regression":
+            return float(example.label)
+        raise KeyError(output_mode)
+
+    labels = [label_from_example(example) for example in examples]
+
+    batch_encoding = tokenizer.batch_encode_plusplus(
+        [(example.text_a, example.text_b) for example in examples], 
+        numbers= [(example.num_a, example.num_b) for example in examples],
+        max_length=max_length, pad_to_max_length=True,
+    )
+
+    features = []
+    for i in range(len(examples)):
+        inputs = {k: batch_encoding[k][i] for k in batch_encoding}
+
+        feature = InputFeatures(**inputs, label=labels[i])
+        features.append(feature)
+
+    for i, example in enumerate(examples[:5]):
+        logger.info("*** Example ***")
+        logger.info("guid: %s" % (example.guid))
+        logger.info("features: %s" % features[i])
+
+    return features
+
 
 
 class OutputMode(Enum):
@@ -300,6 +387,84 @@ class ColaProcessor(DataProcessor):
             examples.append(InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
         return examples
 
+class PubmedQAPlusProcessor(DataProcessor):
+  """Processor for the PubmedQA data set (GLUE version)."""
+
+  def get_train_examples(self, data_dir):
+    """See base class."""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+
+  def get_dev_examples(self, data_dir):
+    """See base class."""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+
+  def get_test_examples(self, data_dir):
+    """See base class."""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
+
+  def get_labels(self):
+    """See base class."""
+    return ["yes", "no", "maybe"]
+
+  def _create_examples(self, lines, set_type):
+    """Creates examples for the training and dev sets."""
+    examples = []
+    for (i, line) in enumerate(lines):
+
+      guid = "%s-%s" % (set_type, i)
+      text_a = line[1]
+      num_a = line[2]
+      text_b = line[3]
+      num_b = line[4]
+      if set_type == "test":
+        label = "yes"
+      else:
+        label = line[5]
+      examples.append(
+          PubmedQAExample(guid=guid, text_a=text_a, num_a=num_a, num_b=num_b, text_b=text_b, label=label))
+    return examples
+
+class PubmedQAProcessor(DataProcessor):
+  """Processor for the PubmedQA data set (GLUE version)."""
+
+  def get_train_examples(self, data_dir):
+    """See base class."""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+
+  def get_dev_examples(self, data_dir):
+    """See base class."""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+
+  def get_test_examples(self, data_dir):
+    """See base class."""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
+
+  def get_labels(self):
+    """See base class."""
+    return ["yes", "no", "maybe"]
+
+  def _create_examples(self, lines, set_type):
+    """Creates examples for the training and dev sets."""
+    examples = []
+    for (i, line) in enumerate(lines):
+      if i == 0:
+        continue
+      guid = "%s-%s" % (set_type, i)
+      text_a = line[1]
+      text_b = line[2]
+      if set_type == "test":
+        label = "yes"
+      else:
+        label = line[3]
+      examples.append(
+          InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+    return examples
 
 class Sst2Processor(DataProcessor):
     """Processor for the SST-2 data set (GLUE version)."""
@@ -562,6 +727,8 @@ glue_tasks_num_labels = {
     "cola": 2,
     "mnli": 3,
     "mrpc": 2,
+    "pubmedqa": 3,
+    "pubmedqaplus": 3,
     "sst-2": 2,
     "sts-b": 1,
     "qqp": 2,
@@ -575,6 +742,8 @@ glue_processors = {
     "mnli": MnliProcessor,
     "mnli-mm": MnliMismatchedProcessor,
     "mrpc": MrpcProcessor,
+    "pubmedqa": PubmedQAProcessor,
+    "pubmedqaplus": PubmedQAPlusProcessor,
     "sst-2": Sst2Processor,
     "sts-b": StsbProcessor,
     "qqp": QqpProcessor,
@@ -588,6 +757,8 @@ glue_output_modes = {
     "mnli": "classification",
     "mnli-mm": "classification",
     "mrpc": "classification",
+    "pubmedqa": "classification",
+    "pubmedqaplus": "classification",
     "sst-2": "classification",
     "sts-b": "regression",
     "qqp": "classification",

@@ -59,12 +59,15 @@ from .configuration_xlnet import XLNET_PRETRAINED_CONFIG_ARCHIVE_MAP, XLNetConfi
 from .data import (
     DataProcessor,
     InputExample,
+    PubmedQAExample,
     InputFeatures,
     SingleSentenceClassificationProcessor,
     SquadExample,
     SquadFeatures,
     SquadV1Processor,
     SquadV2Processor,
+    PubmedQAPlusProcessor,
+    pubmedqa_convert_examples_to_features,
     glue_convert_examples_to_features,
     glue_output_modes,
     glue_processors,
@@ -349,7 +352,7 @@ if is_torch_available():
     # Trainer
     from .trainer import Trainer, set_seed, torch_distributed_zero_first, EvalPrediction
     from .data.data_collator import DefaultDataCollator, DataCollator, DataCollatorForLanguageModeling
-    from .data.datasets import GlueDataset, TextDataset, LineByLineTextDataset, GlueDataTrainingArguments
+    from .data.datasets import GlueDataset, TextDataset, LineByLineTextDataset, GlueDataTrainingArguments, PubmedQADataset
 
 # TensorFlow
 if is_tf_available():

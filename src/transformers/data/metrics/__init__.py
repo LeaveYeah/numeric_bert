@@ -58,6 +58,10 @@ if _has_sklearn:
             return {"acc": simple_accuracy(preds, labels)}
         elif task_name == "mrpc":
             return acc_and_f1(preds, labels)
+        elif task_name == "pubmedqa":
+            return {"acc": simple_accuracy(preds, labels)}
+        elif task_name == "pubmedqaplus":
+            return {"acc": simple_accuracy(preds, labels)}
         elif task_name == "sts-b":
             return pearson_and_spearman(preds, labels)
         elif task_name == "qqp":

@@ -20,7 +20,7 @@ import logging
 import math
 import os
 
-import torch
+import torch, numpy as np
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
@@ -436,6 +436,28 @@ class BertPooler(nn.Module):
         pooled_output = self.dense(first_token_tensor)
         pooled_output = self.activation(pooled_output)
         return pooled_output
+    
+class NumericEmbedding(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, embedding, numbers):
+        for i, number_mask in enumerate(numbers):
+            indices = (number_mask != 0).nonzero()
+            for index in indices:
+                n = number_mask[index].cpu()
+                max_dim = np.log10(n)
+                if max_dim > 8:
+                    embedding[i, index, 12] = 0.9
+                elif max_dim < -5:
+                    embedding[i, index, 0] = 0.1
+                else:
+                    for j in range(int(max_dim), -6, -1):
+                        digit = int(n / 10 ** j)
+                        n = n - digit * 10 ** j
+                    embedding[i, index, j+5] = digit / 10.0
+                    
+        return embedding
 
 
 class BertPredictionHeadTransform(nn.Module):
@@ -613,6 +635,7 @@ class BertModel(BertPreTrainedModel):
         self.config = config
 
         self.embeddings = BertEmbeddings(config)
+        self.num_embedding = NumericEmbedding()
         self.encoder = BertEncoder(config)
         self.pooler = BertPooler(config)
 
@@ -636,6 +659,7 @@ class BertModel(BertPreTrainedModel):
     def forward(
         self,
         input_ids=None,
+        numbers=None,
         attention_mask=None,
         token_type_ids=None,
         position_ids=None,
@@ -726,6 +750,12 @@ class BertModel(BertPreTrainedModel):
         embedding_output = self.embeddings(
             input_ids=input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
         )
+        
+        numeric_embedding = torch.zeros(embedding_output.size(), device=device)
+        if numbers is not None:
+            numeric_embedding = self.num_embedding(embedding=numeric_embedding, numbers=numbers)
+            
+        embedding_output = embedding_output + numeric_embedding
         encoder_outputs = self.encoder(
             embedding_output,
             attention_mask=extended_attention_mask,
@@ -766,6 +796,7 @@ class BertForPreTraining(BertPreTrainedModel):
         attention_mask=None,
         token_type_ids=None,
         position_ids=None,
+        numbers=None,
         head_mask=None,
         inputs_embeds=None,
         masked_lm_labels=None,
@@ -825,6 +856,7 @@ class BertForPreTraining(BertPreTrainedModel):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
+            numbers=numbers,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
         )
@@ -1088,6 +1120,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
         attention_mask=None,
         token_type_ids=None,
         position_ids=None,
+        numbers=None,
         head_mask=None,
         inputs_embeds=None,
         labels=None,
@@ -1138,6 +1171,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
+            numbers=numbers,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
         )
