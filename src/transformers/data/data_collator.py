@@ -67,7 +67,7 @@ class DefaultDataCollator(DataCollator):
         else:
             batch = {}
             
-        if hasattr(first, "numbers") and first.label is not None:
+        if hasattr(first, "numbers") and first.numbers is not None:
             numbers = torch.tensor([f.numbers for f in features], dtype=torch.float)
             batch["numbers"] = numbers
 

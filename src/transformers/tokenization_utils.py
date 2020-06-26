@@ -1752,26 +1752,31 @@ class PreTrainedTokenizer(SpecialTokensMixin):
             max_length = max([total_sequence_length(ids) for ids in input_ids])
 
         batch_outputs = {}
-        for first_ids, second_ids in input_ids:
+        for i, ids in enumerate(input_ids):
             # Prepares a sequence of input id, or a pair of sequences of inputs ids so that it can be used by
             # the model. It adds special tokens, truncates sequences if overflowing while taking into account
             # the special tokens and manages a window stride for overflowing tokens
-            outputs = self.prepare_for_model(
-                first_ids,
-                pair_ids=second_ids,
-                max_length=max_length,
-                pad_to_max_length=pad_to_max_length,
-                add_special_tokens=add_special_tokens,
-                stride=stride,
-                truncation_strategy=truncation_strategy,
-                return_attention_mask=return_attention_masks,
-                return_token_type_ids=return_token_type_ids,
-                return_overflowing_tokens=return_overflowing_tokens,
-                return_special_tokens_mask=return_special_tokens_masks,
-                return_lengths=return_lengths,
-                return_tensors=None,  # We will convert the whole batch to tensors at the end
-                numbers=numbers
-            )
+            first_ids, second_ids = ids
+            try:
+                outputs = self.prepare_for_model(
+                    first_ids,
+                    pair_ids=second_ids,
+                    max_length=max_length,
+                    pad_to_max_length=pad_to_max_length,
+                    add_special_tokens=add_special_tokens,
+                    stride=stride,
+                    truncation_strategy=truncation_strategy,
+                    return_attention_mask=return_attention_masks,
+                    return_token_type_ids=return_token_type_ids,
+                    return_overflowing_tokens=return_overflowing_tokens,
+                    return_special_tokens_mask=return_special_tokens_masks,
+                    return_lengths=return_lengths,
+                    return_tensors=None,  # We will convert the whole batch to tensors at the end
+                    numbers=numbers
+                )
+            except Exception as e:
+                print(e)
+                print(texts[i])
 
             for key, value in outputs.items():
                 if key not in batch_outputs:
@@ -2198,7 +2203,8 @@ class PreTrainedTokenizer(SpecialTokensMixin):
             indices = [i for i, x in enumerate(encoded_inputs["input_ids"]) if x == 1]
             number_mask = [0.0] * len(encoded_inputs["input_ids"])
             for i, index in enumerate(indices):
-                number_mask[index] = float(numbers[i])
+                if i < len(numbers):
+                    number_mask[index] = float(numbers[i])
             encoded_inputs["numbers"] = number_mask
             
         # Prepare model inputs as tensors if asked
