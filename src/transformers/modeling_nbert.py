@@ -28,7 +28,22 @@ from .activations import gelu, gelu_new, swish
 from .configuration_bert import BertConfig
 from .file_utils import add_start_docstrings, add_start_docstrings_to_callable
 from .modeling_utils import PreTrainedModel, prune_linear_layer
-
+from .modeling_bert import (
+        BertPreTrainedModel,
+        BertModel,
+        BertForPreTraining,
+        BertForMaskedLM,
+        BertForNextSentencePrediction,
+        BertForSequenceClassification,
+        BertForMultipleChoice,
+        BertForTokenClassification,
+        BertForQuestionAnswering,
+        load_tf_weights_in_bert,
+        BERT_PRETRAINED_MODEL_ARCHIVE_MAP,
+        BertLayer,
+        load_tf_weights_in_bert,
+        
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -58,78 +73,6 @@ BERT_PRETRAINED_MODEL_ARCHIVE_MAP = {
 }
 
 
-def load_tf_weights_in_bert(model, config, tf_checkpoint_path):
-    """ Load tf checkpoints in a pytorch model.
-    """
-    try:
-        import re
-        import numpy as np
-        import tensorflow as tf
-    except ImportError:
-        logger.error(
-            "Loading a TensorFlow model in PyTorch, requires TensorFlow to be installed. Please see "
-            "https://www.tensorflow.org/install/ for installation instructions."
-        )
-        raise
-    tf_path = os.path.abspath(tf_checkpoint_path)
-    logger.info("Converting TensorFlow checkpoint from {}".format(tf_path))
-    # Load weights from TF model
-    init_vars = tf.train.list_variables(tf_path)
-    names = []
-    arrays = []
-    for name, shape in init_vars:
-        logger.info("Loading TF weight {} with shape {}".format(name, shape))
-        array = tf.train.load_variable(tf_path, name)
-        names.append(name)
-        arrays.append(array)
-
-    for name, array in zip(names, arrays):
-        name = name.split("/")
-        # adam_v and adam_m are variables used in AdamWeightDecayOptimizer to calculated m and v
-        # which are not required for using pretrained model
-        if any(
-            n in ["adam_v", "adam_m", "AdamWeightDecayOptimizer", "AdamWeightDecayOptimizer_1", "global_step"]
-            for n in name
-        ):
-            logger.info("Skipping {}".format("/".join(name)))
-            continue
-        pointer = model
-        for m_name in name:
-            if re.fullmatch(r"[A-Za-z]+_\d+", m_name):
-                scope_names = re.split(r"_(\d+)", m_name)
-            else:
-                scope_names = [m_name]
-            if scope_names[0] == "kernel" or scope_names[0] == "gamma":
-                pointer = getattr(pointer, "weight")
-            elif scope_names[0] == "output_bias" or scope_names[0] == "beta":
-                pointer = getattr(pointer, "bias")
-            elif scope_names[0] == "output_weights":
-                pointer = getattr(pointer, "weight")
-            elif scope_names[0] == "squad":
-                pointer = getattr(pointer, "classifier")
-            else:
-                try:
-                    pointer = getattr(pointer, scope_names[0])
-                except AttributeError:
-                    logger.info("Skipping {}".format("/".join(name)))
-                    continue
-            if len(scope_names) >= 2:
-                num = int(scope_names[1])
-                pointer = pointer[num]
-        if m_name[-11:] == "_embeddings":
-            pointer = getattr(pointer, "weight")
-        elif m_name == "kernel":
-            array = np.transpose(array)
-        try:
-            assert pointer.shape == array.shape
-        except AssertionError as e:
-            e.args += (pointer.shape, array.shape)
-            raise
-        logger.info("Initialize PyTorch weight {}".format(name))
-        pointer.data = torch.from_numpy(array)
-    return model
-
-
 def mish(x):
     return x * torch.tanh(nn.functional.softplus(x))
 
@@ -140,7 +83,7 @@ ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "swish": swish, "gelu_
 BertLayerNorm = torch.nn.LayerNorm
 
 
-class BertEmbeddings(nn.Module):
+class nBertEmbeddings(nn.Module):
     """Construct the embeddings from word, position and token_type embeddings.
     """
 
@@ -437,6 +380,28 @@ class BertPooler(nn.Module):
         pooled_output = self.activation(pooled_output)
         return pooled_output
     
+# class NumericEmbedding(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+    
+#     def forward(self, embedding, numbers):
+#         for i, number_mask in enumerate(numbers):
+#             indices = (number_mask != 0).nonzero()
+#             for index in indices:
+#                 n = number_mask[index].cpu()
+#                 max_dim = np.log10(n)
+#                 if max_dim > 8:
+#                     embedding[i, index, 12] = 0.9
+#                 elif max_dim < -5:
+#                     embedding[i, index, 0] = 0.1
+#                 else:
+#                     for j in range(int(max_dim), -6, -1):
+#                         digit = int(n / 10 ** j)
+#                         n = n - digit * 10 ** j
+#                     embedding[i, index, j+5] = digit / 10.0
+                    
+#         return embedding
+
 class NumericEmbedding(nn.Module):
     def __init__(self):
         super().__init__()
@@ -452,13 +417,11 @@ class NumericEmbedding(nn.Module):
                 elif max_dim < -5:
                     embedding[i, index, 0] = 0.1
                 else:
-                    for j in range(int(max_dim), -6, -1):
-                        digit = int(n / 10 ** j)
-                        n = n - digit * 10 ** j
-                        embedding[i, index, j+5] = digit / 10.0
+                    max_dim = int(np.floor(max_dim))
+                    digit = n / 10.0 ** max_dim 
+                    embedding[i, index, max_dim+5] = digit / 10.0
                     
         return embedding
-
 
 class BertPredictionHeadTransform(nn.Module):
     def __init__(self, config):

@@ -407,7 +407,7 @@ class PubmedQAPlusProcessor(DataProcessor):
 
   def get_labels(self):
     """See base class."""
-    return ["yes", "no", "maybe"]
+    return ["yes", "no"]
 
   def _create_examples(self, lines, set_type):
     """Creates examples for the training and dev sets."""
@@ -447,7 +447,7 @@ class PubmedQAProcessor(DataProcessor):
 
   def get_labels(self):
     """See base class."""
-    return ["yes", "no", "maybe"]
+    return ["yes", "no"]
 
   def _create_examples(self, lines, set_type):
     """Creates examples for the training and dev sets."""
