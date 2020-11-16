@@ -1,23 +1,13 @@
 
 import re, numpy as np
 import torch, pandas as pd
-from transformers import BertModel, BertTokenizer, AutoTokenizer, AutoConfig, AutoModelForSequenceClassification
 from word2number import w2n
-
-import en_core_sci_md
-nlp_sci_md = en_core_sci_md.load()
-
+import re
 import en_core_web_lg
 nlp = en_core_web_lg.load()
 
-input_path = "data/pubmedqa/bqal/test.tsv"
-output_path = "data/pubmedqa/bqal_new/test.tsv"
-
-tokenizer = BertTokenizer.from_pretrained('pretrained_weights/biobert_v1.1_pubmed', do_lower_case=False)
-
-tokenizer.add_special_tokens({"additional_special_tokens":["[NUM]"]})
-
-# tokenizer_large = BertTokenizer.from_pretrained('pretrained_weights/biobert_large', do_lower_case=False)
+import en_core_sci_md
+nlp_sci_md = en_core_sci_md.load()
 
 american_number_system = {
         'zero': 0,
@@ -101,6 +91,34 @@ def get_ent_offsets(text):
     end_offsets = [ent.end_char for ent in doc_sci.ents]
     return start_offsets, end_offsets
 
+
+def get_text_num(text):
+    num_positions, num_norm = get_number(text)
+    last_end = 0
+    new_text = ""
+    if len(num_positions) == 0:
+        return text, ""
+    for num_pos in num_positions:
+        new_text += text[last_end:num_pos[0]] + " [NUM] "
+        last_end = num_pos[1]
+    new_text += text[last_end:len(text)]
+#     new_texts.append(new_text)
+#     input_ids = tokenizer.encode(new_text)
+#     nums = []
+#     nums = [in_id for in_id in input_ids if in_id == 1]
+#     if (len(nums) != len(num_positions)):
+#         print(new_text, num_norm)
+    return new_text, " ".join(num_norm)
+
+
+def get_new_answer_char(orig_pos, new_pos, char):
+    index = np.digitize(char, orig_pos) - 1
+    if index < 0:
+        return char
+    new_char = new_pos[index] - orig_pos[index] + char
+    
+    return new_char
+
 def get_text_num_with_answers(text,  answers):
     num_positions, num_norm = get_number(text)
     last_end = 0
@@ -134,24 +152,35 @@ def get_text_num_with_answers(text,  answers):
 
     return new_text, " ".join(num_norm), new_answers
 
-def get_new_text_num(text):
+def get_text_num_with_answer(text, answer_start, answer_text):
     num_positions, num_norm = get_number(text)
     last_end = 0
     new_text = ""
-    if len(num_positions) == 0:
-        return text, ""
+    orig_pos = []
+    new_pos = []
+    
+   
     for num_pos in num_positions:
         new_text += text[last_end:num_pos[0]] + " [NUM] "
         last_end = num_pos[1]
+        
+        if len(orig_pos) == 0:
+            new_pos.append(num_pos[0] + 7)
+        else:
+            new_pos.append(new_pos[-1] + num_pos[0] - orig_pos[-1] + 7 )
+        orig_pos.append(num_pos[1])
+    
+   
     new_text += text[last_end:len(text)]
+    if answer_text is None:
+        return new_text, " ".join(num_norm), None, None
+    
+    new_answer_start = get_new_answer_char(orig_pos, new_pos, answer_start)
+    new_answer_end = get_new_answer_char(orig_pos, new_pos, answer_start+len(answer_text))
+    new_answer_text = new_text[new_answer_start: new_answer_end]
 #     new_texts.append(new_text)
-    input_ids = tokenizer.encode(new_text)
-    nums = []
-    nums = [in_id for in_id in input_ids if in_id == 1]
-    if (len(nums) != len(num_positions)):
-        print(new_text, num_norm)
-    return new_text, " ".join(num_norm)
 
+    return new_text, " ".join(num_norm), new_answer_start, new_answer_text
 from dateutil.parser import parse
 
 def is_date(string, fuzzy=False):
@@ -177,23 +206,16 @@ def get_date_offsets(ents):
             ends.append(ent.end_char)
     return starts, ends
 
-def get_new_answer_char(orig_pos, new_pos, char):
-    index = np.digitize(char, orig_pos) - 1
-    if index < 0:
-        return char
-    new_char = new_pos[index] - orig_pos[index] + char
-    
-    return new_char
-
 def get_number(text):
     num_positions = []
     num_norm = []
     matches = re.finditer("\d[\d,.]*", text)
+    
+    ent_starts, ent_ends = get_ent_offsets(text)
+#     date_starts, date_ends = get_date_offsets(ents)
 
     doc = nlp(text)
     ents= doc.ents
-    ent_starts, ent_ends = get_ent_offsets(text)
-#     date_starts, date_ends = get_date_offsets(ents)
     i = 0
     skip = False
     for match in matches:
@@ -235,6 +257,7 @@ def get_number(text):
             s -= 1
         num_text = text[s:e].replace(",", "")
         
+        
             
         try:
             number = float(num_text)
@@ -244,44 +267,16 @@ def get_number(text):
             
         if s > 0 and text[s-1].isalpha():
             continue
-        
+            
         if (len(ent_starts) > 0):
             ent_index = np.digitize(s, ent_starts) -1
             ent_text = text[ent_starts[ent_index]:ent_ends[ent_index]]
             
             if (e <= ent_ends[ent_index] and "=" not in ent_text and "<" not in ent_text):
                 continue
-                
-                
-#         if (len(date_starts) > 0):
-#             date_index = np.digitize(s, date_starts) -1
-#             if e <= date_ends[date_index]:
-#                 print(text[s:e])
-#                 continue
-
+        
         num_positions.append([s, e])
         num_norm.append(number)
-#     num_norm = [str(num) for num in num_norm]
+    num_norm = [str(num) for num in num_norm]
     return num_positions, num_norm
 
-if __name__ == "__main__":
-    reader = open(input_path, "r")
-
-    reader.readline()
-
-    writer = open(output_path, "w")
-
-    new_texts = []
-    while True:
-        line = reader.readline()
-        if not line:
-            break
-        split_lines = line.split("\t")
-    
-        index, query, context, label = split_lines[0], split_lines[1], split_lines[2], split_lines[3]
-        new_query, query_nums = get_new_text_num(query)
-        new_text, text_nums = get_new_text_num(context)
-        writer.writelines("\t".join([ index, new_query, query_nums, new_text, text_nums, label]))
-    
-    writer.close()
-    reader.close()

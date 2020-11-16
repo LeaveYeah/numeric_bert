@@ -66,6 +66,9 @@ from .data import (
     SquadFeatures,
     SquadV1Processor,
     SquadV2Processor,
+    BioNumFactQAProcessor, 
+    BioNumFactQAExample, 
+    bionumfactqa_convert_examples_to_features,
     PubmedQAPlusProcessor,
     pubmedqa_convert_examples_to_features,
     glue_convert_examples_to_features,
@@ -198,6 +201,18 @@ if is_torch_available():
         load_tf_weights_in_bert,
         BERT_PRETRAINED_MODEL_ARCHIVE_MAP,
         BertLayer,
+    )
+    
+    from .modeling_nbert import (
+        nBertPreTrainedModel,
+        nBertModel,
+        nBertForPreTraining,
+        nBertForMaskedLM,
+        nBertForNextSentencePrediction,
+        nBertForSequenceClassification,
+        nBertForMultipleChoice,
+        nBertForTokenClassification,
+        nBertForQuestionAnswering,
     )
     from .modeling_openai import (
         OpenAIGPTPreTrainedModel,

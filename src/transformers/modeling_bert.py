@@ -149,13 +149,14 @@ class BertEmbeddings(nn.Module):
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+        self.num_embeddings = NumericEmbedding(config.hidden_size)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None):
+    def forward(self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None, numbers=None):
         if input_ids is not None:
             input_shape = input_ids.size()
         else:
@@ -173,8 +174,11 @@ class BertEmbeddings(nn.Module):
             inputs_embeds = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        numeric_embeddings = torch.zeros(inputs_embeds.size(), device=device)
+        if numbers is not None:
+            numeric_embeddings = self.num_embeddings(embedding=numeric_embeddings, numbers=numbers)
 
-        embeddings = inputs_embeds + position_embeddings + token_type_embeddings
+        embeddings = inputs_embeds + position_embeddings + token_type_embeddings + numeric_embeddings
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings
@@ -437,26 +441,51 @@ class BertPooler(nn.Module):
         pooled_output = self.activation(pooled_output)
         return pooled_output
     
+# class NumericEmbedding(nn.Module):
+#     def __init__(self, config):
+#         super().__init__()
+    
+#     def forward(self, embedding, numbers):
+#         for i, number_mask in enumerate(numbers):
+#             indices = (number_mask != 0).nonzero()
+#             for index in indices:
+#                 n = number_mask[index].cpu()
+#                 max_dim = np.log10(n)
+#                 if max_dim > 8:
+#                     embedding[i, index, 12] = 9
+#                 elif max_dim < -5:
+#                     embedding[i, index, 0] = 1
+#                 else:
+                    
+#                     max_dim = int(np.floor(max_dim))
+#                     digit = n / 10.0 ** max_dim 
+#                     embedding[i, index, max_dim+5] = digit / 10
+#         return embedding
+
+def get_sinusoid_encoding_table(nums, d_hid):
+       
+        def get_position_angle_vec(d_hid):
+            return  np.array([[1/np.power(10000, 4 * (hid_j // 2) / d_hid -1) for hid_j in range(d_hid)]])
+        
+        sinusoid_table = torch.reshape(nums, [-1, 1]) * torch.from_numpy(get_position_angle_vec(d_hid)).float().to(nums.device)
+        
+        sinusoid_table[:, 0::2] = torch.sin(sinusoid_table[:, 0::2])  # dim 2i
+        sinusoid_table[:, 1::2] = torch.cos(sinusoid_table[:, 1::2])  # dim 2i+1
+
+        return sinusoid_table
+
 class NumericEmbedding(nn.Module):
-    def __init__(self):
+    def __init__(self, hidden_size):
         super().__init__()
+        self.hidden_size = hidden_size
     
     def forward(self, embedding, numbers):
-        for i, number_mask in enumerate(numbers):
-            indices = (number_mask != 0).nonzero()
-            for index in indices:
-                n = number_mask[index].cpu()
-                max_dim = np.log10(n)
-                if max_dim > 8:
-                    embedding[i, index, 12] = 0.9
-                elif max_dim < -5:
-                    embedding[i, index, 0] = 0.1
-                else:
-                    for j in range(int(max_dim), -6, -1):
-                        digit = int(n / 10 ** j)
-                        n = n - digit * 10 ** j
-                        embedding[i, index, j+5] = digit / 10.0
-                    
+        
+        indices = (numbers != 0).nonzero(as_tuple=True)
+        nums = numbers[indices]
+        sinusoid_table = get_sinusoid_encoding_table(nums, self.hidden_size)
+        embedding[indices] = sinusoid_table
+        
         return embedding
 
 
@@ -635,7 +664,6 @@ class BertModel(BertPreTrainedModel):
         self.config = config
 
         self.embeddings = BertEmbeddings(config)
-        self.num_embedding = NumericEmbedding()
         self.encoder = BertEncoder(config)
         self.pooler = BertPooler(config)
 
@@ -748,14 +776,9 @@ class BertModel(BertPreTrainedModel):
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
 
         embedding_output = self.embeddings(
-            input_ids=input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
+            input_ids=input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds, numbers=numbers
         )
-        
-        numeric_embedding = torch.zeros(embedding_output.size(), device=device)
-        if numbers is not None:
-            numeric_embedding = self.num_embedding(embedding=numeric_embedding, numbers=numbers)
-            
-        embedding_output = embedding_output + numeric_embedding
+             
         encoder_outputs = self.encoder(
             embedding_output,
             attention_mask=extended_attention_mask,
@@ -1413,6 +1436,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
     def forward(
         self,
         input_ids=None,
+        numbers=None,
         attention_mask=None,
         token_type_ids=None,
         position_ids=None,
@@ -1476,6 +1500,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
+            numbers=numbers,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
         )

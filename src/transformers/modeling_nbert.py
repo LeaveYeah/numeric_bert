@@ -83,7 +83,7 @@ ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "swish": swish, "gelu_
 BertLayerNorm = torch.nn.LayerNorm
 
 
-class nBertEmbeddings(nn.Module):
+class BertEmbeddings(nn.Module):
     """Construct the embeddings from word, position and token_type embeddings.
     """
 
@@ -492,7 +492,7 @@ class BertPreTrainingHeads(nn.Module):
         return prediction_scores, seq_relationship_score
 
 
-class BertPreTrainedModel(PreTrainedModel):
+class nBertPreTrainedModel(PreTrainedModel):
     """ An abstract class to handle weights initialization and
         a simple interface for downloading and loading pretrained models.
     """
@@ -576,7 +576,7 @@ BERT_INPUTS_DOCSTRING = r"""
     "The bare Bert Model transformer outputting raw hidden-states without any specific head on top.",
     BERT_START_DOCSTRING,
 )
-class BertModel(BertPreTrainedModel):
+class nBertModel(nBertPreTrainedModel):
     """
 
     The model can behave as an encoder (with only self-attention) as well
@@ -740,7 +740,7 @@ class BertModel(BertPreTrainedModel):
     a `next sentence prediction (classification)` head. """,
     BERT_START_DOCSTRING,
 )
-class BertForPreTraining(BertPreTrainedModel):
+class nBertForPreTraining(nBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
@@ -842,7 +842,7 @@ class BertForPreTraining(BertPreTrainedModel):
 
 
 @add_start_docstrings("""Bert Model with a `language modeling` head on top. """, BERT_START_DOCSTRING)
-class BertForMaskedLM(BertPreTrainedModel):
+class nBertForMaskedLM(nBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
@@ -978,7 +978,7 @@ class BertForMaskedLM(BertPreTrainedModel):
 @add_start_docstrings(
     """Bert Model with a `next sentence prediction (classification)` head on top. """, BERT_START_DOCSTRING,
 )
-class BertForNextSentencePrediction(BertPreTrainedModel):
+class nBertForNextSentencePrediction(nBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
@@ -1065,7 +1065,7 @@ class BertForNextSentencePrediction(BertPreTrainedModel):
     the pooled output) e.g. for GLUE tasks. """,
     BERT_START_DOCSTRING,
 )
-class BertForSequenceClassification(BertPreTrainedModel):
+class nBertForSequenceClassification(nBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
@@ -1164,7 +1164,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
     the pooled output and a softmax) e.g. for RocStories/SWAG tasks. """,
     BERT_START_DOCSTRING,
 )
-class BertForMultipleChoice(BertPreTrainedModel):
+class nBertForMultipleChoice(nBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
@@ -1264,7 +1264,7 @@ class BertForMultipleChoice(BertPreTrainedModel):
     the hidden-states output) e.g. for Named-Entity-Recognition (NER) tasks. """,
     BERT_START_DOCSTRING,
 )
-class BertForTokenClassification(BertPreTrainedModel):
+class nBertForTokenClassification(nBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
@@ -1362,7 +1362,7 @@ class BertForTokenClassification(BertPreTrainedModel):
     layers on top of the hidden-states output to compute `span start logits` and `span end logits`). """,
     BERT_START_DOCSTRING,
 )
-class BertForQuestionAnswering(BertPreTrainedModel):
+class nBertForQuestionAnswering(nBertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels

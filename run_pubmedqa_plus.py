@@ -25,7 +25,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer, EvalPrediction, GlueDataset
+from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer, EvalPrediction, PubmedQADataset
 from transformers import GlueDataTrainingArguments as DataTrainingArguments
 from transformers import (
     HfArgumentParser,
@@ -35,6 +35,7 @@ from transformers import (
     glue_output_modes,
     glue_tasks_num_labels,
     set_seed,
+    nBertForSequenceClassification
 )
 
 
@@ -123,10 +124,12 @@ def main():
         cache_dir=model_args.cache_dir,
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
-        cache_dir=model_args.cache_dir, so_lower_case=False,
+        model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path, do_lower_case=False,
+        cache_dir=model_args.cache_dir,
     )
-    model = AutoModelForSequenceClassification.from_pretrained(
+    tokenizer.add_special_tokens({"additional_special_tokens":["[NUM]"]})
+    
+    model = nBertForSequenceClassification.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
         config=config,
@@ -134,9 +137,9 @@ def main():
     )
 
     # Get datasets
-    train_dataset = GlueDataset(data_args, tokenizer=tokenizer) if training_args.do_train else None
-    eval_dataset = GlueDataset(data_args, tokenizer=tokenizer, mode="dev") if training_args.do_eval else None
-    test_dataset = GlueDataset(data_args, tokenizer=tokenizer, mode="test") if training_args.do_predict else None
+    train_dataset = PubmedQADataset(data_args, tokenizer=tokenizer) if training_args.do_train else None
+    eval_dataset = PubmedQADataset(data_args, tokenizer=tokenizer, mode="dev") if training_args.do_eval else None
+    test_dataset = PubmedQADataset(data_args, tokenizer=tokenizer, mode="test") if training_args.do_predict else None
 
     def compute_metrics(p: EvalPrediction) -> Dict:
         if output_mode == "classification":
