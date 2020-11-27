@@ -97,7 +97,7 @@ def get_text_num(text):
     last_end = 0
     new_text = ""
     if len(num_positions) == 0:
-        return text, ""
+        return text, []
     for num_pos in num_positions:
         new_text += text[last_end:num_pos[0]] + " [NUM] "
         last_end = num_pos[1]
@@ -108,7 +108,7 @@ def get_text_num(text):
 #     nums = [in_id for in_id in input_ids if in_id == 1]
 #     if (len(nums) != len(num_positions)):
 #         print(new_text, num_norm)
-    return new_text, " ".join(num_norm)
+    return new_text, num_norm
 
 
 def get_new_answer_char(orig_pos, new_pos, char):
@@ -150,7 +150,7 @@ def get_text_num_with_answers(text,  answers):
         new_answers.append({'text':new_answer_text, 'answer_start':new_answer_start})
 #     new_texts.append(new_text)
 
-    return new_text, " ".join(num_norm), new_answers
+    return new_text, num_norm, new_answers
 
 def get_text_num_with_answer(text, answer_start, answer_text):
     num_positions, num_norm = get_number(text)
@@ -180,7 +180,7 @@ def get_text_num_with_answer(text, answer_start, answer_text):
     new_answer_text = new_text[new_answer_start: new_answer_end]
 #     new_texts.append(new_text)
 
-    return new_text, " ".join(num_norm), new_answer_start, new_answer_text
+    return new_text, num_norm, new_answer_start, new_answer_text
 from dateutil.parser import parse
 
 def is_date(string, fuzzy=False):
@@ -277,6 +277,6 @@ def get_number(text):
         
         num_positions.append([s, e])
         num_norm.append(number)
-    num_norm = [str(num) for num in num_norm]
+    
     return num_positions, num_norm
 

@@ -918,6 +918,7 @@ class BertForMaskedLM(BertPreTrainedModel):
     def forward(
         self,
         input_ids=None,
+        numbers=None,
         attention_mask=None,
         token_type_ids=None,
         position_ids=None,
@@ -977,6 +978,7 @@ class BertForMaskedLM(BertPreTrainedModel):
 
         outputs = self.bert(
             input_ids,
+            numbers,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,

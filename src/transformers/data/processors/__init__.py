@@ -6,3 +6,4 @@ from .glue import pubmedqa_convert_examples_to_features, glue_convert_examples_t
 from .squad import SquadExample, SquadFeatures, SquadV1Processor, SquadV2Processor, squad_convert_examples_to_features, BioNumFactQAProcessor, BioNumFactQAExample, bionumfactqa_convert_examples_to_features
 from .utils import DataProcessor, InputExample, InputFeatures, SingleSentenceClassificationProcessor, PubmedQAExample
 from .xnli import xnli_output_modes, xnli_processors, xnli_tasks_num_labels
+from .convert_text import get_text_num

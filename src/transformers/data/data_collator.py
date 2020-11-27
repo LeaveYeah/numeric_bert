@@ -92,13 +92,27 @@ class DataCollatorForLanguageModeling(DataCollator):
     mlm: bool = True
     mlm_probability: float = 0.15
 
-    def collate_batch(self, examples: List[torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def collate_batch(self, features: List[Tuple]) -> Dict[str, torch.Tensor]:
+        examples = [torch.tensor(f[0], dtype=torch.long) for f in features]
+        numbers = [torch.tensor(f[0], dtype=torch.float) for f in features]
+        
         batch = self._tensorize_batch(examples)
+        numbers = self._tensorize_number(numbers)
         if self.mlm:
             inputs, labels = self.mask_tokens(batch)
-            return {"input_ids": inputs, "masked_lm_labels": labels}
+            return {"input_ids": inputs, "numbers":numbers, "masked_lm_labels": labels}
         else:
-            return {"input_ids": batch, "labels": batch}
+            return {"input_ids": batch, "numbers":numbers, "labels": batch}
+    
+    def _tensorize_number(self, numbers: List[torch.Tensor]) -> torch.Tensor:
+        length_of_first = numbers[0].size(0)
+        are_tensors_same_length = all(x.size(0) == length_of_first for x in numbers)
+        if are_tensors_same_length:
+            return torch.stack(numbers, dim=0)
+        else:
+            
+            return pad_sequence(numbers, batch_first=True)
+
 
     def _tensorize_batch(self, examples: List[torch.Tensor]) -> torch.Tensor:
         length_of_first = examples[0].size(0)

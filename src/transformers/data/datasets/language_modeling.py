@@ -8,7 +8,7 @@ from filelock import FileLock
 from torch.utils.data.dataset import Dataset
 
 from ...tokenization_utils import PreTrainedTokenizer
-
+from ..processors.convert_text import get_text_num
 
 logger = logging.getLogger(__name__)
 
@@ -87,15 +87,23 @@ class LineByLineTextDataset(Dataset):
         # that we will soon use fast multithreaded tokenizers from the
         # `tokenizers` repo everywhere =)
         logger.info("Creating features from dataset file at %s", file_path)
+        self.features = []
 
         with open(file_path, encoding="utf-8") as f:
             lines = [line for line in f.read().splitlines() if (len(line) > 0 and not line.isspace())]
-
-        batch_encoding = tokenizer.batch_encode_plus(lines, add_special_tokens=True, max_length=block_size)
-        self.examples = batch_encoding["input_ids"]
+        for line in lines:
+            text, number = get_text_num(line)
+            batch_encoding = tokenizer.encode_plus(text, add_special_tokens=True, max_length=block_size)
+            num_id = tokenizer.vocab['[NUM]']
+            input_ids = batch_encoding['input_ids']
+            number_mask = [0.0] * len(input_ids)
+            number_indice = [i for i in range(len(input_ids)) if input_ids[i] == num_id]
+            for index, num in zip(number_indice, number):
+                number_mask[index] = num
+            self.features.append((batch_encoding['input_ids'], number_mask))
 
     def __len__(self):
-        return len(self.examples)
+        return len(self.features)
 
     def __getitem__(self, i) -> torch.Tensor:
-        return torch.tensor(self.examples[i], dtype=torch.long)
+        return self.features[i]

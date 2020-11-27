@@ -26,6 +26,7 @@ from .processors import (
     xnli_output_modes,
     xnli_processors,
     xnli_tasks_num_labels,
+    get_text_num
 )
 
 

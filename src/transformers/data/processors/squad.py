@@ -319,8 +319,8 @@ def bionumfactqa_convert_example_to_features(example, max_seq_length, doc_stride
     )
     sequence_pair_added_tokens = tokenizer.max_len - tokenizer.max_len_sentences_pair
 
-    all_doc_nums = [] if example.context_nums == "" else [float(num) for num in example.context_nums.split(" ")]
-    question_nums = [] if example.question_nums == "" else [float(num) for num in example.question_nums.split(" ")]
+    all_doc_nums = example.context_nums 
+    question_nums = example.question_nums
     span_doc_tokens = all_doc_tokens
     doc_num_indices = [i for i in range(len(all_doc_tokens)) if all_doc_tokens[i] == "[NUM]"]
 
@@ -1086,6 +1086,7 @@ class BioNumFactQAExample(object):
         self.qas_id = qas_id
         self.question_text, self.question_nums = get_text_num(question_text)
         self.orig_answers = answers
+        new_answers = None
         if answer_text is not None:
             self.context_text, self.context_nums, start_position_character, answer_text = get_text_num_with_answer(context_text, start_position_character, answer_text)
         else:
